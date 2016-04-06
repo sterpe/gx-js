@@ -30,17 +30,18 @@ var installPathHookCommand = cli.Command{
 		if c.Bool("global") {
 			n, err := getNodejsExecutablePath()
 			if err != nil {
-				log.Fatal("failed to get node path:", err)
+				log.Fatal("install-path failed to get node path:", err)
 			}
-			npath = getGlobalNodeModulesFolderPath(n)
+			npath = n
 		} else {
 			wd, err := os.Getwd()
 			if err != nil {
-				log.Fatal("install-path cwd:", err)
+				log.Fatal("install-path failed to get cwd:", err)
 			}
 			npath = wd
 		}
-		fmt.Println(filepath.Join(npath, "node_modules"))
+		npath = getNodeModulesFolderPath(npath, c.Bool("global"))
+		fmt.Println(npath)
 	},
 }
 
@@ -83,9 +84,14 @@ func main() {
 	app.Run(os.Args)
 }
 
-func getGlobalNodeModulesFolderPath(n string) (string) {
-	return filepath.Join(n, "..", "lib")
+func getNodeModulesFolderPath(path string, global bool) (string) {
+	if global {
+		path = filepath.Join(path, "..", "lib")
+	}
+
+	return filepath.Join(path, "node_modules")
 }
+
 func getNodejsExecutablePath() (string, error) {
 	out, err := exec.Command("which", "node").Output()
 	node := strings.TrimSpace(string(out[:]))
