@@ -4,7 +4,9 @@ Package gx-js provides node specific hooks to be called by the gx tool.
 package main
 
 import (
+        "encoding/json"
 	"fmt"
+        "io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -30,7 +32,72 @@ var postInstallHookCommand = cli.Command{
 			log.Fatal("must specify path to newly installed package")
 		}
 		path := c.Args().First()
+		packageJSON := ""
+		recurse := false
+		err := filepath.Walk(path, func(path string, fileinfo os.FileInfo, err error) error {
+			if fileinfo.Name() == "package.json" && fileinfo.IsDir() == false {
+				fmt.Println(path)
+				packageJSON = path
+				recurse = false
+			}
+			if recurse == true {
+				return filepath.SkipDir
+			}
+			return err
+		})
+		if err != nil {
+			log.Fatal("post-install could not find package.json")
+		}
+		fmt.Println(packageJSON)
 		fmt.Println(getNodeModulesBinFolder(path, c.Bool("global")))
+		binFolder := getNodeModulesBinFolder(path, c.Bool("global"))
+		packageRoot := filepath.Dir(packageJSON)
+		content, err := ioutil.ReadFile(packageJSON)
+		if err != nil {
+			log.Fatal("post-install could not read package.json")
+		}
+
+		var dat map[string]interface{}
+		if err := json.Unmarshal(content, &dat); err != nil {
+			log.Fatal("post-install could not parse package.json")
+		}
+		fmt.Println(dat)
+		name := dat["name"].(string)
+		var bin map[string]interface{}
+		var binString string
+		binObject, ok := dat["bin"].(map[string]interface{})
+		if !ok {
+			binString, ok = dat["bin"].(string)
+			if !ok {
+			}
+		}
+		fmt.Println(binObject, binString)
+		if len(binObject) != 0 {
+			bin = binObject
+		}
+		if len(binString) != 0 {
+			bin = make(map[string]interface{})
+			bin[name] = binString
+		}
+		fmt.Println(bin)
+		for executable, location := range bin {
+			f1 := filepath.Join(packageRoot, location.(string))
+			f2 := filepath.Join(binFolder, executable)
+			fmt.Println(f2, " -> ", f1)
+			var perm os.FileMode = 0755
+			err := os.MkdirAll(binFolder, perm)
+			if err != nil {
+				log.Fatal("install-path could not create bin directory")
+			}
+			err = os.Symlink(f1, f2)
+			if (err != nil) {
+				log.Fatal("install-path could not create symlink:", err)
+			}
+			err = os.Chmod(f2, perm)
+			if (err != nil) {
+				log.Fatal("install-path could not change mode on the bin file", err)
+			}
+		}
 	},
 }
 var installPathHookCommand = cli.Command{
@@ -103,7 +170,15 @@ func main() {
 }
 
 func getNodeModulesBinFolder(path string, global bool) (string) {
-	dir, _ := filepath.Split(path)
+	dir := filepath.Dir(path)
+	base := filepath.Base(dir)
+	dir = filepath.Join(dir, "..")
+
+	for base != "node_modules" && (base != "." && base != "/") {
+		base = filepath.Base(dir)
+		dir = filepath.Join(dir, "..")
+	}
+	dir = filepath.Join(dir, "node_modules")
 	if global {
 		bin := filepath.Join(dir, "..", "..", "bin")
 		return bin
