@@ -120,7 +120,7 @@ func getNodeModulesFolderPath(path string, global bool) (string) {
 }
 
 func getNodejsExecutablePath() (string, error) {
-	out, err := exec.Command("which", "node").Output()
+	out, err := exec.Command("node", "-p", "process.execPath").Output()
 	node := strings.TrimSpace(string(out[:]))
 
 	if err != nil {
