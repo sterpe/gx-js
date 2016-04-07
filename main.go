@@ -16,6 +16,23 @@ import (
 
 var cwd string
 
+var postInstallHookCommand = cli.Command{
+	Name: "post-install",
+	Usage: "post install hook for newly installed node packages",
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name: "global",
+			Usage: "specifies whether or not the install was global",
+		},
+	},
+	Action: func (c *cli.Context) {
+		if !c.Args().Present() {
+			log.Fatal("must specify path to newly installed package")
+		}
+		path := c.Args().First()
+		fmt.Println(getNodeModulesBinFolder(path, c.Bool("global")))
+	},
+}
 var installPathHookCommand = cli.Command{
 	Name: "install-path",
 	Usage: "prints out the install path",
@@ -51,6 +68,7 @@ var HookCommand = cli.Command{
 	Usage: "node specific hooks to be called by the gx tool",
 	Subcommands: []cli.Command{
 		installPathHookCommand,
+		postInstallHookCommand,
 	},
 	Action: func(c *cli.Context) {},
 }
@@ -84,6 +102,15 @@ func main() {
 	app.Run(os.Args)
 }
 
+func getNodeModulesBinFolder(path string, global bool) (string) {
+	dir, _ := filepath.Split(path)
+	if global {
+		bin := filepath.Join(dir, "..", "..", "bin")
+		return bin
+	}
+	dotbin := filepath.Join(dir, ".bin")
+	return dotbin
+}
 func getNodeModulesFolderPath(path string, global bool) (string) {
 	if global {
 		path = filepath.Join(path, "..", "lib")
